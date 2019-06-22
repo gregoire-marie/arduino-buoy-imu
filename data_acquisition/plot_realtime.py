@@ -3,6 +3,9 @@ matplotlib.use("TkAgg")  # Set a GUI-compatible backend
 
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import csv
+import os
+from datetime import datetime
 from read_serial import SerialReader
 
 # Adjust the serial port as necessary
@@ -22,23 +25,58 @@ temperature = []
 # Max points on the graph before shifting
 MAX_POINTS = 100
 
-# Create figure and subplots
-fig, axs = plt.subplots(4, 1, figsize=(8, 10), sharex=True)
+# Create figure and subplots with a clean style
+plt.style.use("classic")
+fig, axs = plt.subplots(4, 1, figsize=(10, 10), sharex=True)
+fig.suptitle("Real-Time Sensor Data", fontsize=14, fontweight="bold")
 
-# Titles and labels
-axs[0].set_title("Accelerometer (m/s²)")
-axs[1].set_title("Gyroscope (°/s)")
-axs[2].set_title("Magnetometer (µT)")
-axs[3].set_title("Temperature (°C)")
-axs[3].set_xlabel("Time (s)")
+# Set labels and styles
+titles = ["Accelerometer (m/s²)", "Gyroscope (°/s)", "Magnetometer (µT)", "Temperature (°C)"]
+colors = [["r", "g", "b"], ["r", "g", "b"], ["r", "g", "b"], ["m"]]
+lines = []
+
+for i in range(4):
+    axs[i].set_title(titles[i], fontsize=12, fontweight="bold")
+    axs[i].grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
+    if i < 3:
+        line_x, = axs[i].plot([], [], label="X", color=colors[i][0], linewidth=2)
+        line_y, = axs[i].plot([], [], label="Y", color=colors[i][1], linewidth=2)
+        line_z, = axs[i].plot([], [], label="Z", color=colors[i][2], linewidth=2)
+        lines.append((line_x, line_y, line_z))
+    else:
+        line_temp, = axs[i].plot([], [], label="Temperature", color=colors[i][0], linewidth=2)
+        lines.append(line_temp)
+    axs[i].legend(loc="upper right", fontsize=10)
+
+axs[3].set_xlabel("Time (s)", fontsize=12, fontweight="bold")
+
+# CSV File Setup
+results_folder = f'../results/data_acquisition'
+csv_filename = f"{results_folder}/sensor_data.csv"
+if not os.path.isdir(csv_filename):
+    os.makedirs(results_folder)
+
+with open(csv_filename, mode="w", newline="") as file:
+    writer = csv.writer(file)
+
+    # Write headers only if file is new
+    writer.writerow([
+        "Timestamp",
+        "Accel_X", "Accel_Y", "Accel_Z",
+        "Gyro_X", "Gyro_Y", "Gyro_Z",
+        "Mag_X", "Mag_Y", "Mag_Z",
+        "Temperature"
+    ])
 
 def update_plot(frame):
-    """Updates the plots in real time."""
+    """Updates the plots in real time and writes to CSV."""
     global time_data, accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z, mag_x, mag_y, mag_z, temperature
 
     # Read data from Serial
     data = serial_reader.get_data()
     if data:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
         # Update time axis
         time_data.append(len(time_data))
 
@@ -68,29 +106,38 @@ def update_plot(frame):
             mag_x.pop(0); mag_y.pop(0); mag_z.pop(0)
             temperature.pop(0)
 
-        # Update plots
-        axs[0].cla(); axs[0].set_title("Accelerometer (m/s²)")
-        axs[0].plot(time_data, accel_x, label="X", color='r')
-        axs[0].plot(time_data, accel_y, label="Y", color='g')
-        axs[0].plot(time_data, accel_z, label="Z", color='b')
-        axs[0].legend()
+        # Update plots with new data
+        lines[0][0].set_data(time_data, accel_x)
+        lines[0][1].set_data(time_data, accel_y)
+        lines[0][2].set_data(time_data, accel_z)
 
-        axs[1].cla(); axs[1].set_title("Gyroscope (°/s)")
-        axs[1].plot(time_data, gyro_x, label="X", color='r')
-        axs[1].plot(time_data, gyro_y, label="Y", color='g')
-        axs[1].plot(time_data, gyro_z, label="Z", color='b')
-        axs[1].legend()
+        lines[1][0].set_data(time_data, gyro_x)
+        lines[1][1].set_data(time_data, gyro_y)
+        lines[1][2].set_data(time_data, gyro_z)
 
-        axs[2].cla(); axs[2].set_title("Magnetometer (µT)")
-        axs[2].plot(time_data, mag_x, label="X", color='r')
-        axs[2].plot(time_data, mag_y, label="Y", color='g')
-        axs[2].plot(time_data, mag_z, label="Z", color='b')
-        axs[2].legend()
+        lines[2][0].set_data(time_data, mag_x)
+        lines[2][1].set_data(time_data, mag_y)
+        lines[2][2].set_data(time_data, mag_z)
 
-        axs[3].cla(); axs[3].set_title("Temperature (°C)")
-        axs[3].plot(time_data, temperature, label="Temperature", color='m')
-        axs[3].legend()
+        lines[3].set_data(time_data, temperature)
 
+        # Adjust x-axis limits dynamically
+        axs[0].set_xlim(min(time_data), max(time_data) + 1)
+
+        # Auto scale y-limits
+        for i in range(4):
+            axs[i].set_ylim(min(time_data), max(time_data) + 1)
+
+        # Append data to CSV file
+        with open(csv_filename, mode="a", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow([
+                timestamp,
+                accel_x[-1], accel_y[-1], accel_z[-1],
+                gyro_x[-1], gyro_y[-1], gyro_z[-1],
+                mag_x[-1], mag_y[-1], mag_z[-1],
+                temperature[-1]
+            ])
 
 if __name__ == "__main__":
     # Set up animation
