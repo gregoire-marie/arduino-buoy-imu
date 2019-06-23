@@ -12,11 +12,16 @@ A modular framework for an oceanic buoy using an **Arduino Nano** and an **MPU92
 
 ## Repository Structure
 ```
-├── data_acquisition/       # Python scripts for real-time visualization
-├── docs/                   # Documentation
-├── firmware/               # Arduino Nano firmware (C++)
-├── matlab_analysis/        # MATLAB scripts for analysis
-└── simulation/             # Simulated IMU for testing
+├── app/                        # Launchable scripts
+├── docs/                       # Documentation
+├── firmware/                   # Arduino Nano firmware (C++)
+└── src/
+    └── main/
+        ├── matlab/
+        └── python/
+            ├── plot/           # Plotting utilities & real-time visualization
+            ├── serial/         # Serial communication & data acquisition
+            └── simulation/     # IMU Simulator
 ```
 
 ## Quick Start

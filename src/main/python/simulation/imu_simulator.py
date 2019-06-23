@@ -6,14 +6,14 @@ import pty  # Pseudo-terminal for proper serial simulation
 import math
 import numpy as np
 
-from config import SIMULATE_ARDUINO
+from config import SIMULATE_ARDUINO, PROJECT_DIR
 
 # ------------------------------
 # CONFIGURATION & SIMULATION MODE
 # ------------------------------
 
 # Create a pseudo-terminal (PTY) to simulate a serial port
-TEMP_DIR = os.path.join(os.path.dirname(__file__), "simu_port")
+TEMP_DIR = os.path.join(PROJECT_DIR, "simu_port")
 os.makedirs(TEMP_DIR, exist_ok=True)
 master, slave = pty.openpty()
 SIMULATED_PORT = os.ttyname(slave)  # Get the name of the simulated serial device

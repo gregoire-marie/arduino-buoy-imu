@@ -8,7 +8,7 @@ matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from src.main.python.simulation.imu_simulator import start_simulation, SIMULATED_PORT
-from config import SIMULATE_ARDUINO, ARDUINO_PORT
+from config import SIMULATE_ARDUINO, ARDUINO_PORT, RESULTS_FOLDER
 
 # Set the serial port
 SERIAL_PORT = SIMULATED_PORT if SIMULATE_ARDUINO else ARDUINO_PORT
@@ -30,7 +30,7 @@ temperature = []
 
 # Setup figure and CSV file
 fig, axs, lines = initialize_plot()
-results_folder = "../results/serial"
+results_folder = f"{RESULTS_FOLDER}/serial"
 csv_filename = setup_csv(results_folder)
 
 # Start animation
