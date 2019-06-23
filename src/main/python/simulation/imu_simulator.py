@@ -6,12 +6,11 @@ import pty  # Pseudo-terminal for proper serial simulation
 import math
 import numpy as np
 
+from config import SIMULATE_ARDUINO
+
 # ------------------------------
 # CONFIGURATION & SIMULATION MODE
 # ------------------------------
-
-# Toggle to switch between real Arduino and simulated IMU
-SIMULATED_ARDUINO = True
 
 # Create a pseudo-terminal (PTY) to simulate a serial port
 TEMP_DIR = os.path.join(os.path.dirname(__file__), "simu_port")
@@ -175,7 +174,7 @@ def generate_fake_sensor_data():
 def simulate_arduino_output():
     """Simulates Arduino continuously sending sensor data via a virtual serial port."""
     with open(master, "w") as ser:
-        while SIMULATED_ARDUINO:
+        while SIMULATE_ARDUINO:
             fake_data = generate_fake_sensor_data()
             ser.write(json.dumps(fake_data) + "\n")
             ser.flush()
