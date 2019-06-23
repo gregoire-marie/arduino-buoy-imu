@@ -1,6 +1,8 @@
 import matplotlib
 
-from src.main.python.plot.plot_utils import initialize_plot, setup_csv, update_plot
+from src.main.python.plot.plot_utils import (
+    initialize_raw_plot, setup_csv, update_raw_plot
+)
 from src.main.python.serial.read_serial import SerialReader
 
 matplotlib.use("TkAgg")
@@ -28,18 +30,18 @@ gyro_x, gyro_y, gyro_z = [], [], []
 mag_x, mag_y, mag_z = [], [], []
 temperature = []
 
-# Setup figure and CSV file
-fig, axs, lines = initialize_plot()
+# Setup raw data figure and CSV file
+fig, axs, lines = initialize_raw_plot()
 results_folder = f"{RESULTS_FOLDER}/serial"
 csv_filename = setup_csv(results_folder)
 
-# Start animation
-ani = animation.FuncAnimation(fig, update_plot, interval=100, cache_frame_data=False,
-                              fargs=(serial_reader, time_data, accel_x, accel_y, accel_z,
-                                     gyro_x, gyro_y, gyro_z, mag_x, mag_y, mag_z, temperature,
-                                     lines, axs, csv_filename))
+# Start animations
+raw_ani = animation.FuncAnimation(fig, update_raw_plot, interval=100, cache_frame_data=False,
+                                  fargs=(serial_reader, time_data, accel_x, accel_y, accel_z,
+                                        gyro_x, gyro_y, gyro_z, mag_x, mag_y, mag_z, temperature,
+                                        lines, axs, csv_filename))
 
-# Show plot
+# Show plots
 plt.show()
 
 # Close Serial connection on exit

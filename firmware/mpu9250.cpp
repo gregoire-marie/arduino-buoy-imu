@@ -15,6 +15,7 @@
 #define MAG_ADJ_X     0x10
 
 bool MPU9250::init() {
+    // Initialize connection to the MPU9250
     Wire.beginTransmission(MPU9250_ADDR);
     Wire.write(PWR_MGMT_1);
     Wire.write(0x00); // Wake up the sensor
@@ -103,6 +104,7 @@ void MPU9250::readSensorData() {
     int16_t rawMagY = (magBuffer[3] << 8) | magBuffer[2];
     int16_t rawMagZ = (magBuffer[5] << 8) | magBuffer[4];
 
+    // Assign raw values
     accX = rawAccX;
     accY = rawAccY;
     accZ = rawAccZ;

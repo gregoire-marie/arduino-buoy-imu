@@ -6,11 +6,11 @@ from datetime import datetime
 
 MAX_POINTS = 100
 
-def initialize_plot():
-    """Sets up the matplotlib figure and subplots."""
+def initialize_raw_plot():
+    """Sets up the raw data plots."""
     plt.style.use("classic")
     fig, axs = plt.subplots(4, 1, figsize=(10, 10), sharex=True)
-    fig.suptitle("Real-Time Sensor Data", fontsize=14, fontweight="bold")
+    fig.suptitle("Real-Time Raw Sensor Data", fontsize=14, fontweight="bold")
 
     titles = ["Accelerometer (m/s²)", "Gyroscope (°/s)", "Magnetometer (µT)", "Temperature (°C)"]
     colors = [["r", "g", "b"], ["r", "g", "b"], ["r", "g", "b"], ["m"]]
@@ -49,8 +49,8 @@ def setup_csv(results_folder):
             ])
     return csv_filename
 
-def update_plot(frame, serial_reader, time_data, accel_x, accel_y, accel_z,
-                gyro_x, gyro_y, gyro_z, mag_x, mag_y, mag_z, temperature, lines, axs, csv_filename):
+def update_raw_plot(frame, serial_reader, time_data, accel_x, accel_y, accel_z,
+                    gyro_x, gyro_y, gyro_z, mag_x, mag_y, mag_z, temperature, lines, axs, csv_filename):
     """Updates plots and logs data to CSV in real-time."""
     data = serial_reader.get_data()
     if data:

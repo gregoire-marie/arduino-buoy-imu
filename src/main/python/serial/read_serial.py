@@ -59,3 +59,45 @@ class SerialReader:
         self.running = False
         if self.serial_conn:
             self.serial_conn.close()
+
+
+class ProcessedSerialReader(SerialReader):
+    def __init__(self, *args, **kwargs):
+        """
+        Initializes ProcessedSerialReader, which extends SerialReader to include additional
+        data processing.
+        """
+        SerialReader.__init__(self, *args, **kwargs)
+
+    def get_data(self):
+        """
+        Overrides the get_data() method to fetch raw sensor data and apply additional processing.
+
+        :return: Processed sensor data dictionary.
+        """
+        try:
+            data = self.data_queue.get_nowait()
+        except queue.Empty:
+            return None
+
+        # Ensure data is not empty before processing
+        if not data:
+            return None
+
+        # Apply Filtering (e.g., Kalman, Complementary)
+        data["filtered_accel"] = self.apply_kalman_filter(data["accelerometer"])
+        data["filtered_gyro"] = self.apply_kalman_filter(data["gyroscope"])
+        data["filtered_mag"] = self.apply_kalman_filter(data["magnetometer"])
+
+        return data
+
+    def apply_kalman_filter(self, sensor_data):
+        """
+        Applies a simple Kalman filter (or another filter) to smooth sensor readings.
+
+        :param sensor_data: Raw sensor dictionary {x, y, z}.
+        :return: Filtered sensor dictionary {x, y, z}.
+        """
+        # TODO: Implement actual Kalman filter
+        # For now, return raw data (placeholder)
+        return sensor_data
