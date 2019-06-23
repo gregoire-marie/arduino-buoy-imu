@@ -7,9 +7,14 @@ import csv
 import os
 from datetime import datetime
 from read_serial import SerialReader
+from simulation.imu_simulator import SIMULATED_ARDUINO, start_simulation, SIMULATED_PORT
 
-# Adjust the serial port as necessary
-SERIAL_PORT = "/dev/ttyUSB0"  # Linux/macOS: "/dev/ttyUSB0", Windows: "COM3"
+# Set the serial port based on simulation mode
+SERIAL_PORT = SIMULATED_PORT if SIMULATED_ARDUINO else "/dev/ttyUSB0"
+
+# Start simulation if enabled
+if SIMULATED_ARDUINO:
+    start_simulation()
 
 # Initialize Serial Reader
 serial_reader = SerialReader(port=SERIAL_PORT)
@@ -54,7 +59,7 @@ axs[3].set_xlabel("Time (s)", fontsize=12, fontweight="bold")
 results_folder = f'../results/data_acquisition'
 csv_filename = f"{results_folder}/sensor_data.csv"
 if not os.path.isdir(csv_filename):
-    os.makedirs(results_folder)
+    os.makedirs(results_folder, exist_ok=True)
 
 with open(csv_filename, mode="w", newline="") as file:
     writer = csv.writer(file)
@@ -74,11 +79,13 @@ def update_plot(frame):
 
     # Read data from Serial
     data = serial_reader.get_data()
+    print(data)
     if data:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # Update time axis
-        time_data.append(len(time_data))
+        current_timestep = time_data[-1] + 1 if len(time_data) > 0 else 0
+        time_data.append(current_timestep)
 
         # Store accelerometer data
         accel_x.append(data["accelerometer"]["x"])
@@ -125,8 +132,13 @@ def update_plot(frame):
         axs[0].set_xlim(min(time_data), max(time_data) + 1)
 
         # Auto scale y-limits
-        for i in range(4):
-            axs[i].set_ylim(min(time_data), max(time_data) + 1)
+        axs[0].set_ylim(-2, 12)  # Fixed accelerometer range (example)
+        axs[1].set_ylim(-200, 200)  # Fixed gyroscope range
+        axs[2].set_ylim(-50, 50)  # Fixed magnetometer range
+        axs[3].set_ylim(15, 35)  # Fixed temperature range
+
+        # for i in range(4):
+        #     axs[i].set_ylim(min(time_data), max(time_data) + 1)
 
         # Append data to CSV file
         with open(csv_filename, mode="a", newline="") as file:
