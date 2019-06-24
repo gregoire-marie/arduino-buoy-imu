@@ -58,9 +58,10 @@ def update_raw_plot(frame, serial_reader: MultiSubscriberSerialReader, time_data
                     gyro_x, gyro_y, gyro_z, mag_x, mag_y, mag_z, temperature, lines, axs, csv_filename):
     """Updates plots and logs data to CSV in real-time."""
     global START_TIME
+    global queue_2d
 
-    queue = serial_reader.subscribe()
-    data = serial_reader.get_data(queue)
+    queue_2d = serial_reader.subscribe() if queue_2d is None else queue_2d
+    data = serial_reader.get_data(queue_2d)
     if data:
         timestamp = data['timestamp']
         time_data.append(timestamp)
