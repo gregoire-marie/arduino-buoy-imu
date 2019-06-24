@@ -1,16 +1,13 @@
 import matplotlib.pyplot as plt
-import csv
-import os
 
 from src.main.python.serial.read_serial import MultiSubscriberSerialReader
 
 MAX_POINTS = 100
 
 START_TIME = None
-
 queue_2d = None
 
-def initialize_raw_plot():
+def initialize_2d_plot():
     """Sets up the raw data plots."""
     plt.style.use("classic")
     fig, axs = plt.subplots(4, 1, figsize=(10, 10), sharex=True)
@@ -36,25 +33,9 @@ def initialize_raw_plot():
     axs[3].set_xlabel("Time (s)", fontsize=12, fontweight="bold")
     return fig, axs, lines
 
-def setup_csv(results_folder):
-    """Ensures the results folder exists and initializes the CSV file."""
-    csv_filename = os.path.join(results_folder, "sensor_data.csv")
-    os.makedirs(results_folder, exist_ok=True)
 
-    if not os.path.exists(csv_filename):
-        with open(csv_filename, mode="w", newline="") as file:
-            writer = csv.writer(file)
-            writer.writerow([
-                "Timestamp",
-                "Accel_X", "Accel_Y", "Accel_Z",
-                "Gyro_X", "Gyro_Y", "Gyro_Z",
-                "Mag_X", "Mag_Y", "Mag_Z",
-                "Temperature"
-            ])
-    return csv_filename
-
-def update_raw_plot(frame, serial_reader: MultiSubscriberSerialReader, time_data, accel_x, accel_y, accel_z,
-                    gyro_x, gyro_y, gyro_z, mag_x, mag_y, mag_z, temperature, lines, axs):
+def update_2d_plot(frame, serial_reader: MultiSubscriberSerialReader, time_data, accel_x, accel_y, accel_z,
+                   gyro_x, gyro_y, gyro_z, mag_x, mag_y, mag_z, temperature, lines, axs):
     """Updates plots and logs data to CSV in real-time."""
     global START_TIME
     global queue_2d
@@ -104,20 +85,3 @@ def update_raw_plot(frame, serial_reader: MultiSubscriberSerialReader, time_data
         axs[1].set_ylim(-200, 200)
         axs[2].set_ylim(-50, 50)
         axs[3].set_ylim(15, 35)
-
-def update_csv(serial_reader: MultiSubscriberSerialReader, csv_filename):
-    queue_csv = serial_reader.subscribe()
-
-    while serial_reader.running:
-        data = serial_reader.get_data(queue_csv)
-
-        # Append to CSV
-        with open(csv_filename, mode="a", newline="") as file:
-            writer = csv.writer(file)
-            writer.writerow([
-                data["timestamp"],
-                data["accelerometer"]["x"], data["accelerometer"]["y"], data["accelerometer"]["z"],
-                data["gyroscope"]["x"], data["gyroscope"]["y"], data["gyroscope"]["z"],
-                data["magnetometer"]["x"], data["magnetometer"]["y"], data["magnetometer"]["z"],
-                data["temperature"]
-            ])
