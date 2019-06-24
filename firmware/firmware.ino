@@ -19,8 +19,12 @@ void loop() {
     mpu.readSensorData();
     mpu.normalizeData();
 
+    unsigned long timestamp = millis()
+
     // Send sensor data in JSON format
     Serial.print("{");
+    Serial.print("\"timestamp\": "); Serial.print(timestamp); Serial.print(", ");
+
     Serial.print("\"temperature\": "); Serial.print(mpu.temperature, 4); Serial.print(", ");
 
     Serial.print("\"accelerometer\": {");

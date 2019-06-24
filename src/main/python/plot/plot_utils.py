@@ -8,6 +8,9 @@ from src.main.python.serial.read_serial import MultiSubscriberSerialReader
 
 MAX_POINTS = 100
 
+START_TIME = None
+queue_2d = None
+
 def initialize_raw_plot():
     """Sets up the raw data plots."""
     plt.style.use("classic")
@@ -54,12 +57,16 @@ def setup_csv(results_folder):
 def update_raw_plot(frame, serial_reader: MultiSubscriberSerialReader, time_data, accel_x, accel_y, accel_z,
                     gyro_x, gyro_y, gyro_z, mag_x, mag_y, mag_z, temperature, lines, axs, csv_filename):
     """Updates plots and logs data to CSV in real-time."""
+    global START_TIME
+
     queue = serial_reader.subscribe()
     data = serial_reader.get_data(queue)
     if data:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        current_timestep = time_data[-1] + 1 if time_data else 0
-        time_data.append(current_timestep)
+        timestamp = data['timestamp']
+        time_data.append(timestamp)
+
+        if START_TIME is None:
+            START_TIME = timestamp
 
         # Store sensor data
         accel_x.append(data["accelerometer"]["x"])
@@ -81,14 +88,16 @@ def update_raw_plot(frame, serial_reader: MultiSubscriberSerialReader, time_data
             mag_x.pop(0); mag_y.pop(0); mag_z.pop(0)
             temperature.pop(0)
 
+        elapsed_time_data = [(time_data[i] - START_TIME) / 1e3 for i in range(len(time_data))]
+
         # Update plot data
         for idx, dataset in enumerate([(accel_x, accel_y, accel_z), (gyro_x, gyro_y, gyro_z), (mag_x, mag_y, mag_z)]):
-            lines[idx][0].set_data(time_data, dataset[0])
-            lines[idx][1].set_data(time_data, dataset[1])
-            lines[idx][2].set_data(time_data, dataset[2])
+            lines[idx][0].set_data(elapsed_time_data, dataset[0])
+            lines[idx][1].set_data(elapsed_time_data, dataset[1])
+            lines[idx][2].set_data(elapsed_time_data, dataset[2])
 
-        lines[3].set_data(time_data, temperature)
-        axs[0].set_xlim(min(time_data), max(time_data) + 1)
+        lines[3].set_data(elapsed_time_data, temperature)
+        axs[0].set_xlim(min(elapsed_time_data), max(elapsed_time_data) + 1)
 
         # Fixed y-axis ranges
         axs[0].set_ylim(-2, 12)
