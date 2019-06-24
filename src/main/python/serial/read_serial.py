@@ -3,6 +3,9 @@ import json
 import threading
 import queue
 
+from src.main.python.serial.sensor_data import SensorData
+
+
 class SerialReader:
     """
     Handles serial communication with the Arduino and retrieves JSON data.
@@ -103,17 +106,13 @@ class MultiSubscriberSerialReader(SerialReader):
 
 
 class ProcessedSerialReader(MultiSubscriberSerialReader):
-    def __init__(self, *args, look_back: int = 200, **kwargs):
+    def __init__(self, *args, **kwargs):
         """
         Extends MultiSubscriberSerialReader to include additional data processing.
-
-        Args:
-            look_back: The rolling number of samples to applying the processing to.
         """
         super().__init__(*args, **kwargs)
-        self.historical_data = []
-        self.processed_historical_data = []
-        self.look_back = look_back
+        self.historical_data = SensorData()
+        self.processed_historical_data = SensorData()
 
     def _read_serial(self):
         """Continuously reads serial data and distributes it to all subscriber queues."""
@@ -126,8 +125,8 @@ class ProcessedSerialReader(MultiSubscriberSerialReader):
                     # Process new data in light of historical data
                     processed_data = self.process_data(data)
                     # Add to historical data
-                    self.historical_data.append(data)
-                    self.processed_historical_data.append(processed_data)
+                    self.historical_data.add_data(data)
+                    self.processed_historical_data.add_data(processed_data)
                     # Distribute data to all subscriber queues
                     for subscriber_queue in self.subscribers:
                         subscriber_queue.put(data)

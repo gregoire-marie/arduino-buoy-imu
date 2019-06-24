@@ -26,15 +26,8 @@ if SIMULATE_ARDUINO:
 serial_reader = ProcessedSerialReader(port=SERIAL_PORT, baud_rate=115200, timeout=1)
 serial_reader.connect()
 
-# Initialize data structures
-time_data = []
-accel_x, accel_y, accel_z = [], [], []
-gyro_x, gyro_y, gyro_z = [], [], []
-mag_x, mag_y, mag_z = [], [], []
-temperature = []
-
 # Setup raw data figure
-fig, axs, lines = initialize_2d_plot()
+fig_2d, axs_2d, lines_2d = initialize_2d_plot()
 
 # Setup CSV file
 csv_path = f"{RESULTS_FOLDER}/serial/sensor_data.csv"
@@ -45,10 +38,8 @@ if csv_bool:
     csv_updater = threading.Thread(target=update_csv, args=(serial_reader, csv_path), daemon=True).start()
 
 # Start animations
-ani_2d = animation.FuncAnimation(fig, update_2d_plot, interval=1, cache_frame_data=False,
-                                 fargs=(serial_reader, time_data, accel_x, accel_y, accel_z,
-                                        gyro_x, gyro_y, gyro_z, mag_x, mag_y, mag_z, temperature,
-                                        lines, axs))
+ani_2d = animation.FuncAnimation(fig_2d, update_2d_plot, interval=1, cache_frame_data=False,
+                                 fargs=(serial_reader, lines_2d, axs_2d))
 
 # Show plots
 plt.show()
