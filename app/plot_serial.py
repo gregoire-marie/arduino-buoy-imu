@@ -3,7 +3,7 @@ import matplotlib
 from src.main.python.plot.plot_utils import (
     initialize_raw_plot, setup_csv, update_raw_plot
 )
-from src.main.python.serial.read_serial import SerialReader
+from src.main.python.serial.read_serial import ProcessedSerialReader
 
 matplotlib.use("TkAgg")
 
@@ -20,7 +20,7 @@ if SIMULATE_ARDUINO:
     start_simulation()
 
 # Initialize Serial Reader
-serial_reader = SerialReader(port=SERIAL_PORT)
+serial_reader = ProcessedSerialReader(port=SERIAL_PORT, baud_rate=115200, timeout=1)
 serial_reader.connect()
 
 # Initialize data structures

@@ -4,6 +4,8 @@ import csv
 import os
 from datetime import datetime
 
+from src.main.python.serial.read_serial import MultiSubscriberSerialReader
+
 MAX_POINTS = 100
 
 def initialize_raw_plot():
@@ -49,10 +51,11 @@ def setup_csv(results_folder):
             ])
     return csv_filename
 
-def update_raw_plot(frame, serial_reader, time_data, accel_x, accel_y, accel_z,
+def update_raw_plot(frame, serial_reader: MultiSubscriberSerialReader, time_data, accel_x, accel_y, accel_z,
                     gyro_x, gyro_y, gyro_z, mag_x, mag_y, mag_z, temperature, lines, axs, csv_filename):
     """Updates plots and logs data to CSV in real-time."""
-    data = serial_reader.get_data()
+    queue = serial_reader.subscribe()
+    data = serial_reader.get_data(queue)
     if data:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         current_timestep = time_data[-1] + 1 if time_data else 0
