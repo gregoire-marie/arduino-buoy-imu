@@ -1,14 +1,13 @@
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
 import csv
 import os
-from datetime import datetime
 
 from src.main.python.serial.read_serial import MultiSubscriberSerialReader
 
 MAX_POINTS = 100
 
 START_TIME = None
+
 queue_2d = None
 
 def initialize_raw_plot():
@@ -55,7 +54,7 @@ def setup_csv(results_folder):
     return csv_filename
 
 def update_raw_plot(frame, serial_reader: MultiSubscriberSerialReader, time_data, accel_x, accel_y, accel_z,
-                    gyro_x, gyro_y, gyro_z, mag_x, mag_y, mag_z, temperature, lines, axs, csv_filename):
+                    gyro_x, gyro_y, gyro_z, mag_x, mag_y, mag_z, temperature, lines, axs):
     """Updates plots and logs data to CSV in real-time."""
     global START_TIME
     global queue_2d
@@ -106,13 +105,19 @@ def update_raw_plot(frame, serial_reader: MultiSubscriberSerialReader, time_data
         axs[2].set_ylim(-50, 50)
         axs[3].set_ylim(15, 35)
 
+def update_csv(serial_reader: MultiSubscriberSerialReader, csv_filename):
+    queue_csv = serial_reader.subscribe()
+
+    while serial_reader.running:
+        data = serial_reader.get_data(queue_csv)
+
         # Append to CSV
         with open(csv_filename, mode="a", newline="") as file:
             writer = csv.writer(file)
             writer.writerow([
-                timestamp,
-                accel_x[-1], accel_y[-1], accel_z[-1],
-                gyro_x[-1], gyro_y[-1], gyro_z[-1],
-                mag_x[-1], mag_y[-1], mag_z[-1],
-                temperature[-1]
+                data["timestamp"],
+                data["accelerometer"]["x"], data["accelerometer"]["y"], data["accelerometer"]["z"],
+                data["gyroscope"]["x"], data["gyroscope"]["y"], data["gyroscope"]["z"],
+                data["magnetometer"]["x"], data["magnetometer"]["y"], data["magnetometer"]["z"],
+                data["temperature"]
             ])
