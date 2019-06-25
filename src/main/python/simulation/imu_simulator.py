@@ -1,3 +1,4 @@
+import datetime
 import json
 import time
 import threading
@@ -162,7 +163,11 @@ def generate_fake_sensor_data():
     # Temperature variation
     temperature = TEMP_BASE + 0.5 * math.sin(t / 100) + np.random.normal(0, TEMP_NOISE_STD)
 
+    # Get current time
+    timestamp = int(time.time() * 1000)  # Get current time in milliseconds
+
     return {
+        "timestamp": round(timestamp, 4),
         "temperature": round(temperature, 4),
         "accelerometer": dict(zip(["x", "y", "z"], accel.round(4))),
         "gyroscope": dict(zip(["x", "y", "z"], gyro.round(4))),
