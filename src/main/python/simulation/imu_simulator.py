@@ -6,6 +6,7 @@ import os
 import pty  # Pseudo-terminal for proper serial simulation
 import math
 import numpy as np
+from scipy.spatial.transform import Rotation as R  # For quaternion calculations
 
 from config import SIMULATE_ARDUINO, PROJECT_DIR
 
@@ -38,6 +39,9 @@ TEMP_NOISE_STD = 0.1  # °C (environmental noise)
 
 # Initialize gyroscope bias drift (persistent)
 gyro_bias = np.array([0.0, 0.0, 0.0])
+
+# Quaternion State
+q = np.array([1.0, 0.0, 0.0, 0.0])  # Initial quaternion (no rotation)
 
 # ------------------------------
 # MOTION SIMULATION
@@ -84,21 +88,35 @@ def easing_function(progress):
     return math.sin(math.pi * progress)
 
 
-def generate_fake_sensor_data():
+def madgwick_update(gyro, accel, mag, dt):
     """
-    Generates realistic IMU data simulating a sequential set of movements.
-
-    - Simulated accelerometer (m/s²) with smooth motion and noise
-    - Simulated gyroscope (°/s) with bias drift
-    - Simulated magnetometer (µT) with small noise
-    - Simulated temperature (°C) with slow variation
-
-    :return: Dictionary containing simulated sensor values.
+    Madgwick's IMU algorithm to compute quaternion orientation.
+    :param gyro: 3D gyro vector (degrees/sec)
+    :param accel: 3D accelerometer vector (m/s²)
+    :param mag: 3D magnetometer vector (µT)
+    :param dt: Time step (seconds)
+    :return: Updated quaternion
     """
-    global gyro_bias  # Maintain gyroscope bias drift
-    t = time.time() - start_time
-    phase, progress = get_motion_phase(t)
+    global q
+    gyro_rad = np.radians(gyro)  # Convert to radians/s
 
+    # Convert to rotation object
+    rotation_delta = R.from_rotvec(gyro_rad * dt)
+    q = rotation_delta * R.from_quat(q)
+
+    return q.as_quat()  # Return updated quaternion
+
+
+def compute_ypr(q):
+    """
+    Converts a quaternion to Yaw, Pitch, and Roll (degrees).
+    """
+    r = R.from_quat(q)
+    yaw, pitch, roll = r.as_euler('zyx', degrees=True)
+    return yaw, pitch, roll
+
+
+def sensors_from_phase(phase, progress):
     # Initialize default sensor readings
     accel = np.array([0.0, 0.0, G])  # Gravity vector
     gyro = np.array([0.0, 0.0, 0.0])  # Gyroscope readings
@@ -149,6 +167,29 @@ def generate_fake_sensor_data():
     # Compute rotated magnetic field
     mag = np.dot(rotation_matrix, B_EARTH)
 
+    return accel, gyro, mag
+
+
+def generate_fake_sensor_data():
+    """
+    Generates realistic IMU data simulating a sequential set of movements.
+
+    - Simulated accelerometer (m/s²) with smooth motion and noise
+    - Simulated gyroscope (°/s) with bias drift
+    - Simulated magnetometer (µT) with small noise
+    - Computed quaternions (1) from simulated sensors
+    - Computed euler angles (°) from simulated sensors
+    - Simulated temperature (°C) with slow variation
+
+    :return: Dictionary containing simulated sensor values.
+    """
+    global gyro_bias, q
+    t = time.time() - start_time
+    phase, progress = get_motion_phase(t)
+
+    # Get sensors
+    accel, gyro, mag = sensors_from_phase(phase, progress)
+
     # Apply sensor noise
     accel += np.random.normal(0, ACCEL_NOISE_STD, 3)
     gyro += np.random.normal(0, GYRO_NOISE_STD, 3)
@@ -163,16 +204,24 @@ def generate_fake_sensor_data():
     # Temperature variation
     temperature = TEMP_BASE + 0.5 * math.sin(t / 100) + np.random.normal(0, TEMP_NOISE_STD)
 
+    # Compute quaternion update
+    dt = 0.1  # Simulation step size (10 Hz)
+    q = madgwick_update(gyro, accel, mag, dt)
+
+    # Convert quaternion to YPR
+    yaw, pitch, roll = compute_ypr(q)
+
     # Get current time
-    timestamp = int(time.time() * 1000)  # Get current time in milliseconds
+    timestamp = int(time.time() * 1000)
 
     return {
-        "timestamp": round(timestamp, 4),
-        "temperature": round(temperature, 4),
+        "timestamp": timestamp,
+        "temperature": round(temperature, 2),
         "accelerometer": dict(zip(["x", "y", "z"], accel.round(4))),
         "gyroscope": dict(zip(["x", "y", "z"], gyro.round(4))),
         "magnetometer": dict(zip(["x", "y", "z"], mag.round(4))),
-        "phase": phase
+        "quaternions": dict(zip(["w", "x", "y", "z"], q.round(4))),
+        "euler": {"yaw": round(yaw, 4), "pitch": round(pitch, 4), "roll": round(roll, 4)},
     }
 
 
