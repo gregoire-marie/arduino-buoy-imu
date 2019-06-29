@@ -33,7 +33,7 @@ A modular framework for an oceanic buoy using an **Arduino Nano** and an **MPU92
   - MATLAB (optional)
 
 ### Install the MPU9250 Library
-1. Download the MPU9250 library .ZIP via the [official repository](https://github.com/hibit-dev/mpu9250/raw/master/lib/MPU9250.zip)
+1. Download the [official MPU9250 library](https://github.com/hideakitai/MPU9250) via [this .ZIP](https://github.com/hibit-dev/mpu9250/raw/master/lib/MPU9250.zip).
 2. Import to Arduino IDE via `Sketch > Include Library > Add .ZIP Library`.
 
 ### Flash the Arduino Firmware

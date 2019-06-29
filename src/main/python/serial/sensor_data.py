@@ -6,8 +6,11 @@ class SensorData:
         self.gyro_x, self.gyro_y, self.gyro_z = [], [], []
         self.mag_x, self.mag_y, self.mag_z = [], [], []
         self.quat_x, self.quat_y, self.quat_z, self.quat_w = [], [], [], []
-        self.yaw, self.pitch, self.roll = [], [], []
+        self.roll, self.pitch, self.yaw = [], [], []
         self.temperature = []
+
+        self.start_time = None
+        self.elapsed_time_sec = []
 
     def add_data(self, data):
         """Add new sensor data while maintaining buffer size."""
@@ -30,10 +33,14 @@ class SensorData:
         self.quat_z.append(data["quaternions"]["z"])
         self.quat_w.append(data["quaternions"]["w"])
         # Euler angles
-        self.yaw.append(data["euler"]["yaw"])
-        self.pitch.append(data["euler"]["pitch"])
         self.roll.append(data["euler"]["roll"])
+        self.pitch.append(data["euler"]["pitch"])
+        self.yaw.append(data["euler"]["yaw"])
         self.temperature.append(data["temperature"])
+
+        if self.start_time is None:
+            self.start_time = data['timestamp']
+        self.elapsed_time_sec.append((data['timestamp'] - self.start_time) / 1e3)
 
         # Keep buffer size constant
         if self.max_points is not None and len(self.time_data) > self.max_points:
@@ -42,5 +49,7 @@ class SensorData:
             self.gyro_x.pop(0); self.gyro_y.pop(0); self.gyro_z.pop(0)
             self.mag_x.pop(0); self.mag_y.pop(0); self.mag_z.pop(0)
             self.quat_x.pop(0); self.quat_y.pop(0); self.quat_z.pop(0); self.quat_w.pop(0)
-            self.yaw.pop(0); self.pitch.pop(0); self.roll.pop(0)
+            self.roll.pop(0); self.pitch.pop(0); self.yaw.pop(0)
             self.temperature.pop(0)
+
+            self.elapsed_time_sec.pop(0)
