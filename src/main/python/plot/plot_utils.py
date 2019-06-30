@@ -9,16 +9,13 @@ MAX_POINTS = 100
 
 # 2D Raw Plot
 start_time_2d_raw = None
-queue_2d_raw = None
 data2d_raw = SensorData(max_points=MAX_POINTS)
 
 # 2D Angles Plot
 start_time_2d_angles = None
-queue_2d_angles = None
 data2d_angles = SensorData(max_points=MAX_POINTS)
 
 # 3D Angles Plot
-queue_3d_angles = None
 data3d_angles = SensorData(max_points=1)
 
 # ------------------------------
@@ -55,10 +52,8 @@ def initialize_2d_raw_plot():
 def update_2d_raw_plot(frame, serial_reader: MultiSubscriberSerialReader, lines, axs):
     """Updates plot in real-time."""
     global start_time_2d_raw
-    global queue_2d_raw
 
-    queue_2d_raw = serial_reader.subscribe() if queue_2d_raw is None else queue_2d_raw
-    data = serial_reader.get_data(queue_2d_raw)
+    data = serial_reader.get_last_data()
     if data:
         if start_time_2d_raw is None:
             start_time_2d_raw = data['timestamp']
@@ -84,7 +79,7 @@ def update_2d_raw_plot(frame, serial_reader: MultiSubscriberSerialReader, lines,
         # Fixed y-axis ranges
         axs[0].set_ylim(-2, 12)
         axs[1].set_ylim(-200, 200)
-        axs[2].set_ylim(-50, 50)
+        axs[2].set_ylim(-80, 80)
         axs[3].set_ylim(15, 35)
 
 # ------------------------------
@@ -124,10 +119,8 @@ def initialize_2d_angles_plot():
 def update_2d_angles_plot(frame, serial_reader: MultiSubscriberSerialReader, lines, axs):
     """Updates plot in real-time."""
     global start_time_2d_angles
-    global queue_2d_angles
 
-    queue_2d_angles = serial_reader.subscribe() if queue_2d_angles is None else queue_2d_angles
-    data = serial_reader.get_data(queue_2d_angles)
+    data = serial_reader.get_last_data()
     if data:
         if start_time_2d_angles is None:
             start_time_2d_angles = data['timestamp']
@@ -170,6 +163,7 @@ def initialize_3d_plot():
                                   [length/2, width/2, -height/2], [-length/2, width/2, -height/2],
                                   [-length/2, -width/2, height/2], [length/2, -width/2, height/2],
                                   [length/2, width/2, height/2], [-length/2, width/2, height/2]])
+
     arduino_faces = [[arduino_vertices[j] for j in [0, 1, 2, 3]],
                      [arduino_vertices[j] for j in [4, 5, 6, 7]],
                      [arduino_vertices[j] for j in [0, 1, 5, 4]],
@@ -206,21 +200,22 @@ def initialize_3d_plot():
     ax.set_zticklabels([])
     ax.grid(False)
 
+    ax.set_xlim([-1, 1])
+    ax.set_ylim([-1, 1])
+    ax.set_zlim([-1, 1])
+
     return fig, ax, arduino, arduino_vertices, arduino_axes
 
 
 def update_3d_plot(frame, serial_reader: MultiSubscriberSerialReader, ax, cube, cube_vertices, cube_axes):
     """Updates plot in real-time."""
-    global queue_3d_angles
-
-    queue_3d_angles = serial_reader.subscribe() if queue_3d_angles is None else queue_3d_angles
-    data = serial_reader.get_data(queue_3d_angles)
-
+    data = serial_reader.get_last_data()
     if data is not None:
         data3d_angles.add_data(data)
 
-        roll, pitch, yaw = np.radians(data3d_angles.roll[-1]), np.radians(data3d_angles.pitch[-1]), np.radians(
-            data3d_angles.yaw[-1])
+        roll, pitch, yaw = (np.radians(data3d_angles.roll[-1]),
+                            np.radians(data3d_angles.pitch[-1]),
+                            np.radians(data3d_angles.yaw[-1]))
 
         # Rotation matrices
         Rx = np.array([[1, 0, 0], [0, np.cos(roll), -np.sin(roll)], [0, np.sin(roll), np.cos(roll)]])
@@ -246,7 +241,3 @@ def update_3d_plot(frame, serial_reader: MultiSubscriberSerialReader, ax, cube, 
         new_axes = 0.4 * np.dot(np.eye(3), R_arrows.T)  # Transform identity axes
         for i, (arrow, new_axis) in enumerate(zip(cube_axes, new_axes.T)):
             arrow.set_segments([[[0, 0, 0], new_axis.tolist()]])
-
-        ax.set_xlim([-1, 1])
-        ax.set_ylim([-1, 1])
-        ax.set_zlim([-1, 1])
