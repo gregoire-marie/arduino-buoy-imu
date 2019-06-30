@@ -19,7 +19,7 @@ data2d_angles = SensorData(max_points=MAX_POINTS)
 
 # 3D Angles Plot
 queue_3d_angles = None
-data3d_angles = SensorData(max_points=MAX_POINTS)
+data3d_angles = SensorData(max_points=1)
 
 # ------------------------------
 # 2D RAW SENSORS DATA PLOT
@@ -240,7 +240,7 @@ def update_3d_plot(frame, serial_reader: MultiSubscriberSerialReader, ax, cube, 
                         [rotated_vertices[j] for j in [1, 2, 6, 5]]])
 
         # Modify rotation for arrows (invert X-axis rotation)
-        R_arrows = Rz.T @ Ry.T @ Rx.T
+        R_arrows = R.T
 
         # Update cube local axis arrows
         new_axes = 0.4 * np.dot(np.eye(3), R_arrows.T)  # Transform identity axes
@@ -250,24 +250,3 @@ def update_3d_plot(frame, serial_reader: MultiSubscriberSerialReader, ax, cube, 
         ax.set_xlim([-1, 1])
         ax.set_ylim([-1, 1])
         ax.set_zlim([-1, 1])
-
-
-    # """
-    # # ax.set_axis_off()  # The only one that's needed
-    #
-    # # ax.set_xticks([])
-    # # ax.set_yticks([])
-    # # ax.set_zticks([])
-    #
-    # # ax.set_axis_off()
-    # # ax.set_facecolor('white')  # Sets the background to white instead
-    #
-    # # Transparent spines
-    # # ax.xaxis.pane.set_edgecolor('none')
-    # # ax.yaxis.pane.set_edgecolor('none')
-    # # ax.zaxis.pane.set_edgecolor('none')
-    #
-    # # ax.xaxis.pane.set_alpha(0)  # Hide X plane
-    # # ax.yaxis.pane.set_alpha(0)  # Hide Y plane
-    # # ax.zaxis.pane.set_alpha(0)  # Hide z plane
-    # """
