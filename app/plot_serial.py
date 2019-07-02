@@ -3,8 +3,8 @@ import threading
 import matplotlib
 
 from src.main.python.plot.plot_utils import (
-    initialize_2d_raw_plot, update_2d_raw_plot, initialize_2d_angles_plot, update_2d_angles_plot, initialize_3d_plot,
-    update_3d_plot
+    initialize_2d_raw_plot, update_2d_raw_plot, initialize_2d_trajectory_plot, update_2d_trajectory_plot, initialize_3d_plot,
+    update_3d_plot, initialize_2d_true_trajectory_plot, update_2d_true_trajectory_plot
 )
 from src.main.python.plot.save_utils import setup_csv, update_csv
 from src.main.python.serial.read_serial import ProcessedSerialReader
@@ -29,8 +29,9 @@ serial_reader.connect()
 
 # Setup raw data figure
 fig_2d_raw, axs_2d_raw, lines_2d_raw = initialize_2d_raw_plot()
-fig_2d_angles, axs_2d_angles, lines_2d_angles = initialize_2d_angles_plot()
-fig_3d, axs_3d, cube, cube_vertices, cube_axes = initialize_3d_plot()
+fig_2d_trajectory, axs_2d_trajectory, lines_2d_trajectory = initialize_2d_trajectory_plot()
+# fig_2d_true_trajectory, axs_2d_true_trajectory, lines_2d_true_trajectory = initialize_2d_true_trajectory_plot()
+fig_3d, axs_3d, cube, cube_vertices, cube_axes, timestamp_text = initialize_3d_plot()
 
 # Setup CSV file
 csv_path = f"{RESULTS_FOLDER}/serial/sensor_data.csv"
@@ -41,14 +42,17 @@ if csv_bool:
     csv_updater = threading.Thread(target=update_csv, args=(serial_reader, csv_path), daemon=True).start()
 
 # Start animations
-ani_2d_raw = animation.FuncAnimation(fig_2d_raw, update_2d_raw_plot, interval=100, cache_frame_data=False,
+ani_2d_raw = animation.FuncAnimation(fig_2d_raw, update_2d_raw_plot, interval=10, cache_frame_data=False,
                                      fargs=(serial_reader, lines_2d_raw, axs_2d_raw))
-#
-ani_2d_angles = animation.FuncAnimation(fig_2d_angles, update_2d_angles_plot, interval=100, cache_frame_data=False,
-                                     fargs=(serial_reader, lines_2d_angles, axs_2d_angles))
 
-ani_3d = animation.FuncAnimation(fig_3d, update_3d_plot, interval=100, cache_frame_data=False,
-                                 fargs=(serial_reader, axs_3d, cube, cube_vertices, cube_axes))
+ani_2d_trajectory = animation.FuncAnimation(fig_2d_trajectory, update_2d_trajectory_plot, interval=10, cache_frame_data=False,
+                                            fargs=(serial_reader, lines_2d_trajectory, axs_2d_trajectory))
+
+# ani_2d_true_trajectory = animation.FuncAnimation(fig_2d_true_trajectory, update_2d_true_trajectory_plot, interval=10, cache_frame_data=False,
+#                                                  fargs=(serial_reader, lines_2d_true_trajectory, axs_2d_true_trajectory))
+
+ani_3d = animation.FuncAnimation(fig_3d, update_3d_plot, interval=10, cache_frame_data=False,
+                                 fargs=(serial_reader, axs_3d, cube, cube_vertices, cube_axes, timestamp_text))
 
 # Show plots
 plt.show()

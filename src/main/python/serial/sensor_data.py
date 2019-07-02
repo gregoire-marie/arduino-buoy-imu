@@ -9,6 +9,9 @@ class SensorData:
         self.roll, self.pitch, self.yaw = [], [], []
         self.temperature = []
 
+        self.true_x, self.true_y, self.true_z = [], [], []
+        self.true_roll, self.true_pitch, self.true_yaw = [], [], []
+
         self.start_time = None
         self.elapsed_time_sec = []
 
@@ -38,6 +41,16 @@ class SensorData:
         self.yaw.append(data["euler"]["yaw"])
         self.temperature.append(data["temperature"])
 
+        # True position and orientation
+        if "true_position" in list(data.keys()):
+            self.true_x.append(data["true_position"]["x"])
+            self.true_y.append(data["true_position"]["y"])
+            self.true_z.append(data["true_position"]["z"])
+        if "true_euler" in list(data.keys()):
+            self.true_roll.append(data["true_euler"]["roll"])
+            self.true_pitch.append(data["true_euler"]["pitch"])
+            self.true_yaw.append(data["true_euler"]["yaw"])
+
         if self.start_time is None:
             self.start_time = data['timestamp']
         self.elapsed_time_sec.append((data['timestamp'] - self.start_time) / 1e3)
@@ -51,5 +64,10 @@ class SensorData:
             self.quat_x.pop(0); self.quat_y.pop(0); self.quat_z.pop(0); self.quat_w.pop(0)
             self.roll.pop(0); self.pitch.pop(0); self.yaw.pop(0)
             self.temperature.pop(0)
+
+            if len(self.true_x) > 0:
+                self.true_x.pop(0); self.true_y.pop(0); self.true_z.pop(0);
+            if len(self.true_roll) > 0:
+                self.true_roll.pop(0); self.true_pitch.pop(0); self.true_yaw.pop(0)
 
             self.elapsed_time_sec.pop(0)

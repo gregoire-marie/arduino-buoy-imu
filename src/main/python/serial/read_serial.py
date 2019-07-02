@@ -23,6 +23,7 @@ class SerialReader:
         self.timeout = timeout
         self.serial_conn = None
         self.data_queue = queue.Queue()
+        self.last_data = None
         self.running = False
 
     def connect(self):
@@ -41,8 +42,8 @@ class SerialReader:
             try:
                 line = self.serial_conn.readline().decode('utf-8').strip()
                 if line:
-                    data = json.loads(line)
-                    self.data_queue.put(data)
+                    self.last_data = json.loads(line)
+                    self.data_queue.put(self.last_data)
             except (json.JSONDecodeError, UnicodeDecodeError):
                 print("Error decoding JSON data from serial.")
 
@@ -53,6 +54,14 @@ class SerialReader:
         :return: A dictionary with the latest sensor readings.
         """
         return self.data_queue.get()
+
+    def get_last_data(self):
+        """
+        Waits and retrieves the latest available data from the queue.
+
+        :return: A dictionary with the latest sensor readings.
+        """
+        return self.last_data
 
     def close(self):
         """Closes the serial connection."""
@@ -124,12 +133,14 @@ class ProcessedSerialReader(MultiSubscriberSerialReader):
                     data = json.loads(line)
                     # Process new data in light of historical data
                     processed_data = self.process_data(data)
+                    # Update last data
+                    self.last_data = processed_data
                     # Add to historical data
                     self.historical_data.add_data(data)
                     self.processed_historical_data.add_data(processed_data)
                     # Distribute data to all subscriber queues
                     for subscriber_queue in self.subscribers:
-                        subscriber_queue.put(data)
+                        subscriber_queue.put(self.last_data)
             except (json.JSONDecodeError, UnicodeDecodeError):
                 print("Error decoding JSON data from serial.")
 

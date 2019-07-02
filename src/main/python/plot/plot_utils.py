@@ -9,17 +9,18 @@ MAX_POINTS = 100
 
 # 2D Raw Plot
 start_time_2d_raw = None
-queue_2d_raw = None
 data2d_raw = SensorData(max_points=MAX_POINTS)
 
 # 2D Angles Plot
-start_time_2d_angles = None
-queue_2d_angles = None
-data2d_angles = SensorData(max_points=MAX_POINTS)
+start_time_2d_trajectory = None
+data2d_trajectory = SensorData(max_points=MAX_POINTS)
+
+# 2D True Plot
+start_time_2d_true_trajectory= None
+data2d_true_trajectory = SensorData(max_points=MAX_POINTS)
 
 # 3D Angles Plot
-queue_3d_angles = None
-data3d_angles = SensorData(max_points=MAX_POINTS)
+data3d = SensorData(max_points=1)
 
 # ------------------------------
 # 2D RAW SENSORS DATA PLOT
@@ -55,10 +56,8 @@ def initialize_2d_raw_plot():
 def update_2d_raw_plot(frame, serial_reader: MultiSubscriberSerialReader, lines, axs):
     """Updates plot in real-time."""
     global start_time_2d_raw
-    global queue_2d_raw
 
-    queue_2d_raw = serial_reader.subscribe() if queue_2d_raw is None else queue_2d_raw
-    data = serial_reader.get_data(queue_2d_raw)
+    data = serial_reader.get_last_data()
     if data:
         if start_time_2d_raw is None:
             start_time_2d_raw = data['timestamp']
@@ -83,15 +82,15 @@ def update_2d_raw_plot(frame, serial_reader: MultiSubscriberSerialReader, lines,
 
         # Fixed y-axis ranges
         axs[0].set_ylim(-2, 12)
-        axs[1].set_ylim(-200, 200)
-        axs[2].set_ylim(-50, 50)
+        axs[1].set_ylim(-100, 100)
+        axs[2].set_ylim(-80, 80)
         axs[3].set_ylim(15, 35)
 
 # ------------------------------
 # 2D COMPUTED ANGLES PLOT
 # ------------------------------
 
-def initialize_2d_angles_plot():
+def initialize_2d_trajectory_plot():
     """Sets up the angles data plots."""
     plt.style.use("classic")
     fig, axs = plt.subplots(2, 1, figsize=(10, 10), sharex=True)
@@ -111,36 +110,34 @@ def initialize_2d_angles_plot():
             line_quatw, = axs[i].plot([], [], label="W", color=colors[i][3], linewidth=2)
             lines.append((line_quatx, line_quaty, line_quatz, line_quatw))
         else:
-            line_yaw, = axs[i].plot([], [], label="Yaw", color=colors[i][0], linewidth=2)
+            line_roll, = axs[i].plot([], [], label="Roll", color=colors[i][0], linewidth=2)
             line_pitch, = axs[i].plot([], [], label="Pitch", color=colors[i][1], linewidth=2)
-            line_roll, = axs[i].plot([], [], label="Roll", color=colors[i][2], linewidth=2)
-            lines.append((line_yaw, line_pitch, line_roll))
+            line_yaw, = axs[i].plot([], [], label="Yaw", color=colors[i][2], linewidth=2)
+            lines.append((line_roll, line_pitch, line_yaw))
         axs[i].legend(loc="upper right", fontsize=10)
 
     axs[1].set_xlabel("Time (s)", fontsize=12, fontweight="bold")
     return fig, axs, lines
 
 
-def update_2d_angles_plot(frame, serial_reader: MultiSubscriberSerialReader, lines, axs):
+def update_2d_trajectory_plot(frame, serial_reader: MultiSubscriberSerialReader, lines, axs):
     """Updates plot in real-time."""
-    global start_time_2d_angles
-    global queue_2d_angles
+    global start_time_2d_trajectory
 
-    queue_2d_angles = serial_reader.subscribe() if queue_2d_angles is None else queue_2d_angles
-    data = serial_reader.get_data(queue_2d_angles)
+    data = serial_reader.get_last_data()
     if data:
-        if start_time_2d_angles is None:
-            start_time_2d_angles = data['timestamp']
+        if start_time_2d_trajectory is None:
+            start_time_2d_trajectory = data['timestamp']
 
         # Store sensor data
-        data2d_angles.add_data(data)
+        data2d_trajectory.add_data(data)
 
         # Get elapsed time in seconds
-        elapsed_time_data = data2d_angles.elapsed_time_sec
+        elapsed_time_data = data2d_trajectory.elapsed_time_sec
 
         # Update plot data
-        for idx, dataset in enumerate([(data2d_angles.quat_x, data2d_angles.quat_y, data2d_angles.quat_z, data2d_angles.quat_w),
-                                       (data2d_angles.yaw, data2d_angles.pitch, data2d_angles.roll)]
+        for idx, dataset in enumerate([(data2d_trajectory.quat_x, data2d_trajectory.quat_y, data2d_trajectory.quat_z, data2d_trajectory.quat_w),
+                                       (data2d_trajectory.roll, data2d_trajectory.pitch, data2d_trajectory.yaw)]
                                       ):
             lines[idx][0].set_data(elapsed_time_data, dataset[0])
             lines[idx][1].set_data(elapsed_time_data, dataset[1])
@@ -151,6 +148,68 @@ def update_2d_angles_plot(frame, serial_reader: MultiSubscriberSerialReader, lin
 
         # Fixed y-axis ranges
         axs[0].set_ylim(-1, 1)
+        axs[1].set_ylim(-180, 180)
+
+# ------------------------------
+# 2D TRUE TRAJECTORY AND ORIENTATION PLOT
+# ------------------------------
+
+def initialize_2d_true_trajectory_plot():
+    """Sets up the true data plots."""
+    plt.style.use("classic")
+    fig, axs = plt.subplots(2, 1, figsize=(10, 10), sharex=True)
+    fig.suptitle("Real-Time True Trajectory and Orientation", fontsize=14, fontweight="bold")
+
+    titles = ["Position (m)", "True Euler Orientation (°)"]
+    colors = [["r", "g", "b"], ["r", "g", "b"]]
+    lines = []
+
+    for i in range(2):
+        axs[i].set_title(titles[i], fontsize=12, fontweight="bold")
+        axs[i].grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
+        if i < 1:
+            line_quatx, = axs[i].plot([], [], label="X", color=colors[i][0], linewidth=2)
+            line_quaty, = axs[i].plot([], [], label="Y", color=colors[i][1], linewidth=2)
+            line_quatz, = axs[i].plot([], [], label="Z", color=colors[i][2], linewidth=2)
+            lines.append((line_quatx, line_quaty, line_quatz))
+        else:
+            line_roll, = axs[i].plot([], [], label="Roll", color=colors[i][0], linewidth=2)
+            line_pitch, = axs[i].plot([], [], label="Pitch", color=colors[i][1], linewidth=2)
+            line_yaw, = axs[i].plot([], [], label="Yaw", color=colors[i][2], linewidth=2)
+            lines.append((line_roll, line_pitch, line_yaw))
+        axs[i].legend(loc="upper right", fontsize=10)
+
+    axs[1].set_xlabel("Time (s)", fontsize=12, fontweight="bold")
+    return fig, axs, lines
+
+
+def update_2d_true_trajectory_plot(frame, serial_reader: MultiSubscriberSerialReader, lines, axs):
+    """Updates plot in real-time."""
+    global start_time_2d_true_trajectory
+
+    data = serial_reader.get_last_data()
+    if data:
+        if start_time_2d_true_trajectory is None:
+            start_time_2d_true_trajectory = data['timestamp']
+
+        # Store sensor data
+        data2d_true_trajectory.add_data(data)
+
+        # Get elapsed time in seconds
+        elapsed_time_data = data2d_true_trajectory.elapsed_time_sec
+
+        # Update plot data
+        for idx, dataset in enumerate([(data2d_true_trajectory.true_x, data2d_true_trajectory.true_y, data2d_true_trajectory.true_z),
+                                       (data2d_true_trajectory.true_roll, data2d_true_trajectory.true_pitch, data2d_true_trajectory.true_yaw)]
+                                      ):
+            lines[idx][0].set_data(elapsed_time_data, dataset[0])
+            lines[idx][1].set_data(elapsed_time_data, dataset[1])
+            lines[idx][2].set_data(elapsed_time_data, dataset[2])
+
+        axs[0].set_xlim(min(elapsed_time_data), max(elapsed_time_data) + 1)
+
+        # Fixed y-axis ranges
+        axs[0].set_ylim(-1000, 1000)
         axs[1].set_ylim(-180, 180)
 
 # ------------------------------
@@ -170,6 +229,7 @@ def initialize_3d_plot():
                                   [length/2, width/2, -height/2], [-length/2, width/2, -height/2],
                                   [-length/2, -width/2, height/2], [length/2, -width/2, height/2],
                                   [length/2, width/2, height/2], [-length/2, width/2, height/2]])
+
     arduino_faces = [[arduino_vertices[j] for j in [0, 1, 2, 3]],
                      [arduino_vertices[j] for j in [4, 5, 6, 7]],
                      [arduino_vertices[j] for j in [0, 1, 5, 4]],
@@ -206,21 +266,27 @@ def initialize_3d_plot():
     ax.set_zticklabels([])
     ax.grid(False)
 
-    return fig, ax, arduino, arduino_vertices, arduino_axes
+    ax.set_xlim([-1, 1])
+    ax.set_ylim([-1, 1])
+    ax.set_zlim([-1, 1])
+
+    # Add timestamp text (bottom-left corner)
+    timestamp_text = ax.text2D(0.05, 0.05, "", transform=fig.transFigure, fontsize=12)
+
+    return fig, ax, arduino, arduino_vertices, arduino_axes, timestamp_text
 
 
-def update_3d_plot(frame, serial_reader: MultiSubscriberSerialReader, ax, cube, cube_vertices, cube_axes):
+def update_3d_plot(frame, serial_reader: MultiSubscriberSerialReader, ax, cube, cube_vertices, cube_axes, timestamp_text):
     """Updates plot in real-time."""
-    global queue_3d_angles
-
-    queue_3d_angles = serial_reader.subscribe() if queue_3d_angles is None else queue_3d_angles
-    data = serial_reader.get_data(queue_3d_angles)
-
+    data = serial_reader.get_last_data()
     if data is not None:
-        data3d_angles.add_data(data)
+        data3d.add_data(data)
 
-        roll, pitch, yaw = np.radians(data3d_angles.roll[-1]), np.radians(data3d_angles.pitch[-1]), np.radians(
-            data3d_angles.yaw[-1])
+        timestamp = data3d.time_data[-1]
+
+        roll, pitch, yaw = (np.radians(data3d.roll[-1]),
+                            np.radians(data3d.pitch[-1]),
+                            np.radians(data3d.yaw[-1]))
 
         # Rotation matrices
         Rx = np.array([[1, 0, 0], [0, np.cos(roll), -np.sin(roll)], [0, np.sin(roll), np.cos(roll)]])
@@ -240,34 +306,12 @@ def update_3d_plot(frame, serial_reader: MultiSubscriberSerialReader, ax, cube, 
                         [rotated_vertices[j] for j in [1, 2, 6, 5]]])
 
         # Modify rotation for arrows (invert X-axis rotation)
-        R_arrows = Rz.T @ Ry.T @ Rx.T
+        R_arrows = R.T
 
         # Update cube local axis arrows
         new_axes = 0.4 * np.dot(np.eye(3), R_arrows.T)  # Transform identity axes
         for i, (arrow, new_axis) in enumerate(zip(cube_axes, new_axes.T)):
             arrow.set_segments([[[0, 0, 0], new_axis.tolist()]])
 
-        ax.set_xlim([-1, 1])
-        ax.set_ylim([-1, 1])
-        ax.set_zlim([-1, 1])
-
-
-    # """
-    # # ax.set_axis_off()  # The only one that's needed
-    #
-    # # ax.set_xticks([])
-    # # ax.set_yticks([])
-    # # ax.set_zticks([])
-    #
-    # # ax.set_axis_off()
-    # # ax.set_facecolor('white')  # Sets the background to white instead
-    #
-    # # Transparent spines
-    # # ax.xaxis.pane.set_edgecolor('none')
-    # # ax.yaxis.pane.set_edgecolor('none')
-    # # ax.zaxis.pane.set_edgecolor('none')
-    #
-    # # ax.xaxis.pane.set_alpha(0)  # Hide X plane
-    # # ax.yaxis.pane.set_alpha(0)  # Hide Y plane
-    # # ax.zaxis.pane.set_alpha(0)  # Hide z plane
-    # """
+        # Update the timestamp text
+        timestamp_text.set_text(f"Time: {timestamp:.2f}s")

@@ -3,86 +3,71 @@
 ## Functioning
 We differentiate the equations of motion for real-time IMU simulation: **accelerometer**, **gyroscope**, **magnetometer**, and **thermometer**.
 
-### IMU Motion Cycle
+### Trajectories
+Multiple cases are available. To add a new one, just implement a child to the class `Trajectory`. Make sure the positions and orientations start at 0, to mimic a calibration. 
 
-| Phase | Duration (s) | Affected Sensor |
-|--------|--------------|----------------|
-| Forward / Backward | 2 each | Accelerometer |
-| Left / Right | 2 each | Accelerometer |
-| Up / Down | 2 each | Accelerometer |
-| Roll Left / Right | 2 each | Gyroscope, Magnetometer |
-| Pitch Up / Down | 2 each | Gyroscope, Magnetometer |
-| Yaw Left / Right | 2 each | Gyroscope, Magnetometer |
-
-**Sensor noise and bias drift** is added to resemble actual IMU behavior.
+The trajectories provide a set of `positions` and `orientations`, respectively in the (`x`, `y`, `z`) and (`roll`, `pitch`, `yaw`) frames.
 
 ---
 
-## 1. Kinematic Equations for Acceleration
+## 1. Accelerometer
 
-From **kinematics**:
+The **accelerometer** measures **accelerations** in m/s^2, along the X, Y and Z local axes.
 
-**d = (1/2) * a * t²**
+They are computed by differentiating the trajectory positions, to obtain the velocities, which are differentiated a second time to get the accelerations:
 
-Where:
-- **d** = displacement in meters
-- **a** = acceleration in m/s²
-- **t** = time in seconds
+`a[i] = (v[i] - v[i - 1]) / dt` 
 
-Solving for acceleration:
-
-**a = (2 * d) / t²**
-
-Each phase moves the IMU by **2 meters in 2 seconds**, so:
-
-**a = (2 * 2) / (2²) = 4 / 4 = 1.0 m/s²**
-
-To ensure **smooth motion**, we multiply by a sinusoidal **easing function**:
-
-**a(t) = A * sin(π * t)**
-
-This ensures gradual acceleration and deceleration during each phase.
+Where: `v[i] = (x[i + 1] - x[i]) / dt`
 
 ---
 
-## 2. Rotational Motion Equations for Gyroscope
-The **gyroscope** measures **angular velocity** (degrees per second, °/s), not acceleration.
+## 2. Gyroscope
+The **gyroscope** measures **angular velocity** (degrees per second, °/s), around the X (roll), Y (pitch) and Z (yaw) global axes.
 
-For uniform angular motion:
+They are computed by differentiating once the trajectory orientations:
 
-**ω = θ / t**
+`ω[i] = (ω[i] - ω[i - 1]) / dt`
 
-Where:
-- **θ** = total angle rotated (90° per phase)
-- **t** = duration (2 sec per phase)
 
-Thus, the expected angular velocity:
 
-**ω = 90 / 2 = 45°/s**
+## 3. Magnetometer
+The **magnetometer** measures the Earth's magnetic field intensity in µT along the X, Y and Z local axes.
 
-To ensure smooth motion, we again apply an **easing function**:
+They are computed by applying a **rotation matrix** based on the current trajectory orientation, to the default Earth's magnetic field vector.
 
-**ω(t) = Ω * sin(π * t)**
+For example, a motion around the Z-axis (yaw), applies the following transformation:
 
-where **Ω = 45°/s** is the max angular velocity per phase.
+`B[i] = R[i] x B_earth`
 
-### Rotation Matrices for Magnetometer Data
-The **magnetometer** measures Earth's magnetic field, which changes as the IMU rotates. We apply a **rotation matrix** based on the current phase’s motion.
+Where: `R[i] = Rz[i] x Ry[i] x Rx[i]` 
 
-For example, a **Yaw Left** motion applies the following transformation:
+And `B_earth ≈ 1e-3 * [19.55, 335.9, 45.00] µT` at Greenwich according to the [NOAA](https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml).
 
-**R_yaw =**
+Also: **Rx =**
 
-| cos(θ)  | -sin(θ) |  0  |
-|---------|---------|-----|
-| sin(θ)  |  cos(θ) |  0  |
-|   0     |    0    |  1  |
+| 1 | 0         | 0          |
+|---|-----------|------------|
+| 0 | cos(roll) | -sin(roll) |
+| 0 | sin(roll) | cos(roll)  |
 
-This is applied to the **Earth's magnetic field vector** to get the new magnetometer readings.
+And: **Ry =**
+
+| cos(pitch)  | 0 | sin(pitch) |
+|-------------|---|------------|
+| 0           | 1 | 0          |
+| -sin(pitch) | 0 | cos(pitch) |
+
+And: **Rz =**
+
+| cos(yaw) | -sin(yaw) |  0  |
+|----------|-----------|-----|
+| sin(yaw) | cos(yaw)  |  0  |
+| 0        | 0         |  1  |
 
 ---
 
-## 3. Sensor Noise and Bias Drift
+## 4. Sensor Noise and Bias Drift
 To increase realism, **random noise and slow sensor drift** are added:
 - **Accelerometer Noise**: Gaussian noise with **σ = 0.05 m/s²**.
 - **Gyroscope Noise**: Gaussian noise with **σ = 0.1°/s**.
@@ -92,16 +77,17 @@ To increase realism, **random noise and slow sensor drift** are added:
 
 ---
 
-## 4. Simulated Serial Output
+## 5. Simulated Serial Output
 The simulated IMU sends **JSON-formatted sensor data** at **10 Hz** to a virtual serial port:
 
 ```json
 {
-  "temperature": 24.97,
-  "accelerometer": { "x": 0.5, "y": 0.0, "z": 9.81 },
-  "gyroscope": { "x": 45.0, "y": 0.0, "z": 0.0 },
-  "magnetometer": { "x": 24.5, "y": -31.2, "z": 38.9 },
-  "phase": "Roll Left"
+  'timestamp': 3100.0, 
+  'temperature': 25.15, 
+  'accelerometer': {'x': -0.0764, 'y': 0.3874, 'z': 9.81}, 
+  'gyroscope': {'x': -4.3826, 'y': -0.3722, 'z': 3.2556}, 
+  'magnetometer': {'x': 27.3186, 'y': -16.7745, 'z': 45.7964}, 
+  'quaternions': {'x': 0.0189, 'y': 0.0011, 'z': -0.0461, 'w': 0.9988}, 
+  'euler': {'roll': -5.2803, 'pitch': 0.2284, 'yaw': 2.161},
 }
 ```
-
