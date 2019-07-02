@@ -1,4 +1,3 @@
-import datetime
 import json
 import time
 import threading
@@ -6,9 +5,12 @@ import os
 import pty  # Pseudo-terminal for proper serial simulation
 import math
 import numpy as np
-from scipy.spatial.transform import Rotation as R  # For quaternion calculations
 
 from config import SIMULATE_ARDUINO, PROJECT_DIR
+from src.main.python.simulation.filters import madgwick_update
+from src.main.python.simulation.utils import rotation_matrix_from_euler, compute_rpy
+from src.main.python.simulation.trajectory import Trajectory, OscillationTrajectory, \
+    UniformTranslationRotationTrajectory, SpiralTrajectory
 
 # ------------------------------
 # CONFIGURATION & SIMULATION MODE
@@ -19,11 +21,15 @@ TEMP_DIR = os.path.join(PROJECT_DIR, "simu_port")
 os.makedirs(TEMP_DIR, exist_ok=True)
 master, slave = pty.openpty()
 SIMULATED_PORT = os.ttyname(slave)  # Get the name of the simulated serial device
-TIME_STEP = 0.1  # Simulate a 10Hz sensor
+TIME_STEP = 0.1  # Simulate a 1/TIME_STEP Hz sensor. May be small for numerical stability
+SERIAL_TIME_STEP = 0.1  # Approximate period of serial updates
 
 # ------------------------------
 # SENSOR SIMULATION PARAMETERS
 # ------------------------------
+
+# Duration
+DURATION = 500  # s
 
 # Physical Constants
 G = 9.81  # Gravity (m/s²)
@@ -33,181 +39,92 @@ RAD_TO_DEG = 180 / math.pi  # Conversion factor from radians to degrees
 
 # Noise Parameters
 ACCEL_NOISE_STD = 0.05  # m/s² (low noise)
-GYRO_NOISE_STD = 0.1  # degrees/s
-GYRO_BIAS_STD = 0.005  # degrees/s per step (slow drift)
+GYRO_NOISE_STD = 0.5  # degrees/s
+GYRO_BIAS_STD = 0.001  # degrees/s per step (slow drift)
 MAG_NOISE_STD = 0.3  # µT (minimal noise for stability)
 TEMP_NOISE_STD = 0.1  # °C (environmental noise)
+
+# Madgwick filter parameters
+beta = 0.008660254037844387 # math.sqrt(3/4) * GYRO_NOISE_STD
 
 # Initialize gyroscope bias drift (persistent)
 gyro_bias = np.array([0.0, 0.0, 0.0])
 
 # Quaternion State
-q = np.array([0.0, 0.0, 0.0, 1.0])  # Initial quaternion (no rotation)
+q = np.array([0.0, 1e-9, 0.0, 1.0])  # Initial quaternion (no rotation)
 
 # ------------------------------
 # MOTION SIMULATION
 # ------------------------------
 
-# Motion sequence timing (seconds per phase)
-MOTION_PHASES = [
-    ("Forward", 2), ("Backward", 2),
-    ("Left", 2), ("Right", 2),
-    ("Up", 2), ("Down", 2),
-    ("Roll Left", 2), ("Roll Right", 2),
-    ("Pitch Up", 2), ("Pitch Down", 2),
-    ("Yaw Left", 2), ("Yaw Right", 2)
-]
-TOTAL_MOTION_TIME = sum(t for _, t in MOTION_PHASES)
+# Define a trajectory
+# trajectory = UniformTranslationRotationTrajectory(dt=TIME_STEP, duration=DURATION, velocity=(0, 0, 0), angular_velocity=(0, 0, 10))
+trajectory = OscillationTrajectory(dt=TIME_STEP, duration=DURATION)
+# trajectory = SpiralTrajectory(dt=TIME_STEP, duration=DURATION)
+
 
 # Global time counter
 start_time = time.time()
 
-
-def get_motion_phase(t):
+class IMUSimulator:
     """
-    Determines the current motion phase based on elapsed time.
-
-    :param t: Elapsed time since start
-    :return: (phase, progress) where phase is the current motion and progress (0 to 1) is the phase completion percentage.
+    Simulates an Inertial Measurement Unit (IMU) with accelerometer, gyroscope, and magnetometer.
     """
-    t = t % TOTAL_MOTION_TIME  # Ensure cyclic motion
-    elapsed = 0
-    for phase, duration in MOTION_PHASES:
-        if elapsed <= t < elapsed + duration:
-            return phase, (t - elapsed) / duration
-        elapsed += duration
-    return None, 0  # Should not occur
+
+    def __init__(self, trajectory: Trajectory):
+        """
+        Initializes the IMU simulator.
+
+        Parameters:
+        trajectory (Trajectory): The trajectory to be simulated.
+        """
+        self.trajectory = trajectory
+        self.gravity = np.array([0, 0, -9.81])  # Gravity vector in world frame (m/s2)
+        self.magnetic_field = B_EARTH  # Earth's magnetic field vector in world frame (µT)
+
+    def simulate(self):
+        """
+        Simulates IMU sensor readings based on the provided trajectory.
+
+        Returns:
+        tuple: Position, orientation, accelerometer data, gyroscope data, magnetometer data.
+        """
+        position, orientation = self.trajectory.generate()
+        num_steps = self.trajectory.num_steps
+        time_data = self.trajectory.time_steps
+
+        accelerometer_data = np.zeros((num_steps, 3))
+        gyroscope_data = np.zeros((num_steps, 3))
+        magnetometer_data = np.zeros((num_steps, 3))
+        thermometer_data = np.zeros(num_steps)
+
+        orientation_unwrapped = np.unwrap(np.radians(orientation), axis=0)  # Convert to radians and unwrap
+
+        for i in range(1, num_steps - 1):
+            roll, pitch, yaw = np.radians(orientation[i])
+            R = rotation_matrix_from_euler(roll, pitch, yaw)
+
+            # Compute acceleration
+            velocity_prev = (position[i] - position[i - 1]) / self.trajectory.dt
+            velocity_curr = (position[i + 1] - position[i]) / self.trajectory.dt
+            acceleration = (velocity_curr - velocity_prev) / self.trajectory.dt
+            accelerometer_data[i] = acceleration - self.gravity
+
+            # Compute gyroscope values as angular velocity differences
+            angular_velocity = np.degrees((orientation_unwrapped[i] - orientation_unwrapped[i - 1])) / self.trajectory.dt
+            gyroscope_data[i] = angular_velocity
+
+            # Rotate magnetic field into the IMU frame
+            magnetometer_data[i] = np.dot(R, B_EARTH)  # µT
+
+            # Compute temperature
+            thermometer_data[i] = TEMP_BASE + 0.5 * math.sin(time_data[i] / 100) + np.random.normal(0, TEMP_NOISE_STD)
+
+        return time_data, accelerometer_data, gyroscope_data, magnetometer_data, thermometer_data
 
 
-def easing_function(progress):
-    """
-    Generates a smooth acceleration profile using a sinusoidal function.
-
-    :param progress: Normalized phase progress (0 to 1)
-    :return: Adjusted progress value for smoother motion.
-    """
-    return math.sin(math.pi * progress)
-
-
-def madgwick_update(gyro, accel, mag, dt):
-    """
-    Madgwick's IMU algorithm to compute quaternion orientation.
-    :param gyro: 3D gyro vector (degrees/sec)
-    :param accel: 3D accelerometer vector (m/s²)
-    :param mag: 3D magnetometer vector (µT)
-    :param dt: Time step (seconds)
-    :return: Updated quaternion
-    """
-    global q
-    gyro_rad = np.radians(gyro)  # Convert to radians/s
-
-    # Convert to rotation object
-    rotation_delta = R.from_rotvec(gyro_rad * dt)
-    q = rotation_delta * R.from_quat(q)
-
-    return q.as_quat()  # Return updated quaternion
-
-
-def compute_rpy(q):
-    """
-    Converts a quaternion to Roll, Pitch, and Yaw (degrees).
-    """
-    r = R.from_quat(q)
-    roll, pitch, yaw = r.as_euler('xyz', degrees=True)
-
-    return roll, pitch, yaw
-
-
-def sensors_from_phase(phase, progress):
-    """ Returns accelerometer (m/s2), gyroscope (°/s) and magnetometer vectors (µT). """
-    # Initialize default sensor readings
-    accel = np.array([0.0, 0.0, G])  # Gravity vector m/s2
-    gyro = np.array([0.0, 0.0, 0.0])  # Gyroscope readings °/s
-    rotation_matrix = np.eye(3)  # No rotation by default
-
-    # Smooth transition using easing function
-    smooth_progress = easing_function(progress)
-
-    # Apply motion effects
-    if phase == "Forward":
-        accel[0] = smooth_progress * (2 * 2 / (2 ** 2))
-    elif phase == "Backward":
-        accel[0] = -smooth_progress * (2 * 2 / (2 ** 2))
-    elif phase == "Left":
-        accel[1] = smooth_progress * (2 * 2 / (2 ** 2))
-    elif phase == "Right":
-        accel[1] = -smooth_progress * (2 * 2 / (2 ** 2))
-    elif phase == "Up":
-        accel[2] += smooth_progress * (2 * 2 / (2 ** 2))
-    elif phase == "Down":
-        accel[2] -= smooth_progress * (2 * 2 / (2 ** 2))
-
-    # Rotational motion
-    rot_angle = smooth_progress * math.pi / 2
-    if phase == "Roll Left":
-        gyro[0] = smooth_progress * 45  # °/s
-        rotation_matrix = np.array(
-            [[1, 0, 0],
-             [0, math.cos(rot_angle), -math.sin(rot_angle)],
-             [0, math.sin(rot_angle), math.cos(rot_angle)]])
-    elif phase == "Roll Right":
-        gyro[0] = -smooth_progress * 45
-        rotation_matrix = np.array(
-            [[1, 0, 0],
-             [0, math.cos(rot_angle), -math.sin(rot_angle)],
-             [0, math.sin(rot_angle), math.cos(rot_angle)]])
-
-    elif phase == "Pitch Up":
-        gyro[1] = smooth_progress * 45
-        rotation_matrix = np.array(
-            [[math.cos(rot_angle), 0, math.sin(rot_angle)],
-             [0, 1, 0],
-             [-math.sin(rot_angle), 0, math.cos(rot_angle)]])
-    elif phase == "Pitch Down":
-        gyro[1] = -smooth_progress * 45
-        rotation_matrix = np.array(
-            [[math.cos(rot_angle), 0, math.sin(rot_angle)],
-             [0, 1, 0],
-             [-math.sin(rot_angle), 0, math.cos(rot_angle)]])
-
-    elif phase == "Yaw Left":
-        gyro[2] = smooth_progress * 45
-        rotation_matrix = np.array(
-            [[math.cos(rot_angle), -math.sin(rot_angle), 0],
-             [math.sin(rot_angle), math.cos(rot_angle), 0],
-             [0, 0, 1]])
-    elif phase == "Yaw Right":
-        gyro[2] = -smooth_progress * 45
-        rotation_matrix = np.array(
-            [[math.cos(rot_angle), -math.sin(rot_angle), 0],
-             [math.sin(rot_angle), math.cos(rot_angle), 0],
-             [0, 0, 1]])
-
-    # Compute rotated magnetic field
-    mag = np.dot(rotation_matrix, B_EARTH)  # µT
-
-    return accel, gyro, mag
-
-
-def generate_fake_sensor_data():
-    """
-    Generates realistic IMU data simulating a sequential set of movements.
-
-    - Simulated accelerometer (m/s²) with smooth motion and noise
-    - Simulated gyroscope (°/s) with bias drift
-    - Simulated magnetometer (µT) with small noise
-    - Computed quaternions (1) from simulated sensors
-    - Computed euler angles (°) from simulated sensors
-    - Simulated temperature (°C) with slow variation
-
-    :return: Dictionary containing simulated sensor values.
-    """
+def get_quat_euler(accel, gyro, mag):
     global gyro_bias, q
-    t = time.time() - start_time
-    phase, progress = get_motion_phase(t)
-
-    # Get sensors
-    accel, gyro, mag = sensors_from_phase(phase, progress)
 
     # Apply sensor noise
     accel += np.random.normal(0, ACCEL_NOISE_STD, 3)
@@ -220,41 +137,54 @@ def generate_fake_sensor_data():
     # Apply small magnetometer noise
     mag += np.random.normal(0, MAG_NOISE_STD, 3)
 
-    # Temperature variation
-    temperature = TEMP_BASE + 0.5 * math.sin(t / 100) + np.random.normal(0, TEMP_NOISE_STD)
-
     # Compute quaternion update
-    dt = TIME_STEP  # Simulation step size
-    q = madgwick_update(gyro, accel, mag, dt)
+    q = madgwick_update(q=q, accel=accel, gyro=gyro, mag=mag, dt=TIME_STEP, beta=beta)
 
     # Convert quaternion to RPY
     roll, pitch, yaw = compute_rpy(q)
 
-    # Get current time
-    timestamp = int(time.time() * 1000)
+    # For some reason, roll and yaw are inverted
+    roll, yaw = yaw, roll
 
-    # print(dict(zip(["x", "y", "z", "w"], q.round(4))))
-    # print({"roll": round(roll, 4), "pitch": round(pitch, 4), "yaw": round(yaw, 4)})
-
-    return {
-        "timestamp": timestamp,
-        "temperature": round(temperature, 2),
-        "accelerometer": dict(zip(["x", "y", "z"], accel.round(4))),
-        "gyroscope": dict(zip(["x", "y", "z"], gyro.round(4))),
-        "magnetometer": dict(zip(["x", "y", "z"], mag.round(4))),
-        "quaternions": dict(zip(["x", "y", "z", "w"], q.round(4))),
-        "euler": {"roll": round(roll, 4), "pitch": round(pitch, 4), "yaw": round(yaw, 4)},
-    }
+    return q, roll, pitch, yaw
 
 
 def simulate_arduino_output():
     """Simulates Arduino continuously sending sensor data via a virtual serial port."""
+    print("Generating Arduino data...")
+    # Get a list of IMU values
+    imu = IMUSimulator(trajectory)
+    time_data, acc_data, gyro_data, mag_data, temp_data = imu.simulate()
+
+    # Sample at serial frequency
+    N = int(SERIAL_TIME_STEP / TIME_STEP)  # Subsampling index step
+    if N > 0:
+        time_data = time_data[::N]
+        acc_data = acc_data[::N]
+        gyro_data = gyro_data[::N]
+        mag_data = mag_data[::N]
+        temp_data = temp_data[::N]
+
+    print("Sending via Serial port...")
     with open(master, "w") as ser:
-        while SIMULATE_ARDUINO:
-            fake_data = generate_fake_sensor_data()
+        i = 0
+        while SIMULATE_ARDUINO and i < len(acc_data):
+            timestamp = time_data[i]
+            accel, gyro, mag, temperature = acc_data[i], gyro_data[i], mag_data[i], temp_data[i]
+            q, roll, pitch, yaw = get_quat_euler(accel=accel, gyro=gyro, mag=mag)
+            fake_data = {
+                "timestamp": timestamp * 1000,
+                "temperature": round(temperature, 2),
+                "accelerometer": dict(zip(["x", "y", "z"], accel.round(4))),
+                "gyroscope": dict(zip(["x", "y", "z"], gyro.round(4))),
+                "magnetometer": dict(zip(["x", "y", "z"], mag.round(4))),
+                "quaternions": dict(zip(["x", "y", "z", "w"], q.round(4))),
+                "euler": {"roll": round(roll, 4), "pitch": round(pitch, 4), "yaw": round(yaw, 4)},
+            }
             ser.write(json.dumps(fake_data) + "\n")
             ser.flush()
-            time.sleep(TIME_STEP)  # Simulate sensor output frequency
+            time.sleep(SERIAL_TIME_STEP)  # Simulate sensor output frequency
+            i+=1
 
 
 def start_simulation():
